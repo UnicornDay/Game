@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Vase on Table Simulator</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+<!-- Import map for Three.js core and OrbitControls addon -->
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
+
+<!-- Main script using modules -->
+<script type="module">
+
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // --- Global Variables ---
+    let scene, camera, renderer, controls;
+    let floor, table, vase;
+
+    // --- Constants ---
+    const tableSize = { width: 8, height: 4, depth: 5 };
+    const tableTopThickness = 0.3;
+    const tableLegSize = 0.4;
+    const tableTopY = tableSize.height; // Y coordinate of the table surface
+    const floorY = 0;
+
+    // --- Initialization ---
+    function init() {
+        // Scene
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xb0c4de); // Light Steel Blue background
+        scene.fog = new THREE.Fog(0xb0c4de, 15, 50);
+
+        // Camera
+        camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(5, tableSize.height + 3, 12); // Position looking towards the table
+
+        // Renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        directionalLight.position.set(8, 15, 10);
+        directionalLight.castShadow = true;
+        // Configure shadow properties
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
+        directionalLight.shadow.camera.near = 0.5;
+        directionalLight.shadow.camera.far = 50;
+        directionalLight.shadow.camera.left = -15;
+        directionalLight.shadow.camera.right = 15;
+        directionalLight.shadow.camera.top = 15;
+        directionalLight.shadow.camera.bottom = -15;
+        scene.add(directionalLight);
+        // const shadowHelper = new THREE.CameraHelper( directionalLight.shadow.camera ); // Optional
+        // scene.add( shadowHelper );
+
+        // Create Objects
+        createFloor();
+        createTable();
+        createVase();
+
+        // Controls
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, tableSize.height / 2, 0); // Target the center of the table area
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 3;
+        controls.maxDistance = 30;
+        controls.maxPolarAngle = Math.PI / 1.8; // Limit looking angle slightly
+        controls.update();
+
+        // Resize Listener
+        window.addEventListener('resize', onWindowResize);
+    }
+
+    // --- Create Scene Objects ---
+    function createFloor() {
+        const floorGeo = new THREE.PlaneGeometry(50, 50);
+        const floorMaterial = new THREE.MeshStandardMaterial({
+            color: 0x999999, // Grey floor
+            roughness: 0.8,
+            metalness: 0.1
+        });
+        floor = new THREE.Mesh(floorGeo, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = floorY;
+        floor.receiveShadow = true;
+        scene.add(floor);
+    }
+
+    function createTable() {
+        table = new THREE.Group(); // Group table parts together
+        scene.add(table);
+        // table.position.y = floorY; // Table group origin is at floor level
+
+        const tableTopMat = new THREE.MeshStandardMaterial({ color: 0x966F33, roughness: 0.7, metalness: 0.1 }); // Light brown wood color
+        const tableLegMat = new THREE.MeshStandardMaterial({ color: 0x6F4E2A, roughness: 0.8 }); // Darker wood
+
+        // Tabletop
+        const tableTopGeo = new THREE.BoxGeometry(tableSize.width, tableTopThickness, tableSize.depth);
+        const tableTopMesh = new THREE.Mesh(tableTopGeo, tableTopMat);
+        tableTopMesh.position.y = tableTopY - tableTopThickness / 2; // Position top surface correctly
+        tableTopMesh.castShadow = true;
+        tableTopMesh.receiveShadow = true; // Can receive shadow from vase
+        table.add(tableTopMesh);
+
+        // Legs
+        const legHeight = tableSize.height - tableTopThickness;
+        const legGeo = new THREE.BoxGeometry(tableLegSize, legHeight, tableLegSize);
+        const cornerOffsetW = tableSize.width / 2 - tableLegSize; // Place legs near corners
+        const cornerOffsetD = tableSize.depth / 2 - tableLegSize;
+
+        const legPositions = [
+            { x: -cornerOffsetW, z: -cornerOffsetD },
+            { x: cornerOffsetW, z: -cornerOffsetD },
+            { x: -cornerOffsetW, z: cornerOffsetD },
+            { x: cornerOffsetW, z: cornerOffsetD },
+        ];
+
+        legPositions.forEach(pos => {
+            const leg = new THREE.Mesh(legGeo, tableLegMat);
+            // Leg's origin is at its center, so position its center at half its height
+            leg.position.set(pos.x, legHeight / 2, pos.z);
+            leg.castShadow = true;
+            table.add(leg);
+        });
+    }
+
+    function createVase() {
+        // Define the points for the vase profile (2D shape to revolve)
+        // Points go from bottom to top
+        const points = [];
+        points.push( new THREE.Vector2( 0.1, 0 ) );   // Base inner edge (slightly off center for thickness)
+        points.push( new THREE.Vector2( 0.8, 0 ) );   // Base outer edge
+        points.push( new THREE.Vector2( 1.2, 0.5 ) ); // Lower curve outwards
+        points.push( new THREE.Vector2( 1.0, 2.5 ) ); // Main body inward curve
+        points.push( new THREE.Vector2( 1.1, 3.5 ) ); // Neck flare
+        points.push( new THREE.Vector2( 1.0, 4.0 ) ); // Top rim outer edge
+        points.push( new THREE.Vector2( 0.8, 4.0 ) ); // Top rim inner edge
+
+        // Create geometry by revolving the points around the Y axis
+        // Increase segment count for smoother curve
+        const vaseGeo = new THREE.LatheGeometry( points, 32 );
+
+        // Create material for the vase (e.g., ceramic)
+        const vaseMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff, // White ceramic
+            roughness: 0.2,
+            metalness: 0.0,
+            side: THREE.DoubleSide // Render both sides in case profile isn't perfect
+        });
+
+        vase = new THREE.Mesh( vaseGeo, vaseMat );
+        vase.castShadow = true;
+        vase.receiveShadow = false; // Vase usually won't receive shadows onto itself significantly here
+
+        // Position the vase ON TOP of the table surface
+        vase.position.y = tableTopY; // The base of the LatheGeometry is at y=0 relative to the object
+        vase.position.x = 0;      // Center it on the table (or adjust as desired)
+        vase.position.z = 0;
+
+        scene.add( vase );
+    }
+
+    // --- Handle Window Resizing ---
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // --- Animation Loop ---
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // Optional: Slowly rotate the vase?
+        // if (vase) {
+        //     vase.rotation.y += 0.005;
+        // }
+
+        // Update Controls (important for damping)
+        controls.update();
+
+        // Render Scene
+        renderer.render(scene, camera);
+    }
+
+    // --- Start ---
+    init();
+    animate();
+
+</script>
+
+</body>
+</html>

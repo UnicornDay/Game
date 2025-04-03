@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Cube Simulator</title>
+    <style>
+        body { margin: 0; overflow: hidden; } /* Prevent scrollbars */
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+<!-- Import map for Three.js core and OrbitControls addon -->
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
+
+<!-- Main script using modules -->
+<script type="module">
+
+    // 1. Import Three.js core and OrbitControls
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // 2. Global variables for scene components
+    let scene, camera, renderer, cube, controls;
+
+    // 3. Initialization function
+    function init() {
+        // Scene Setup
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x444444); // Medium gray background
+
+        // Camera Setup
+        camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+        camera.position.set(2, 3, 5); // Move camera back and slightly up/right
+
+        // Renderer Setup
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        document.body.appendChild( renderer.domElement );
+
+        // Lighting (MeshBasicMaterial doesn't need light, but MeshStandardMaterial does)
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft white light
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0xffffff, 0.8); // Brighter point light
+        pointLight.position.set(5, 10, 7); // Position the light
+        scene.add(pointLight);
+
+        // Cube Geometry
+        const geometry = new THREE.BoxGeometry( 1.5, 1.5, 1.5 ); // Slightly larger cube
+
+        // Cube Material (Using StandardMaterial to react to light)
+        const material = new THREE.MeshStandardMaterial( {
+            color: 0x0099ff, // Blue color
+            roughness: 0.5,  // Make it somewhat rough
+            metalness: 0.1   // Make it slightly metallic
+        } );
+
+        // Cube Mesh
+        cube = new THREE.Mesh( geometry, material );
+        scene.add( cube );
+
+        // OrbitControls Setup (Allows user interaction)
+        controls = new OrbitControls( camera, renderer.domElement );
+        controls.enableDamping = true; // Creates a smoother feeling after dragging
+        controls.dampingFactor = 0.05;
+        controls.screenSpacePanning = false; // Optional: limit panning behavior
+        controls.minDistance = 2;    // How close you can zoom in
+        controls.maxDistance = 20;   // How far you can zoom out
+        controls.maxPolarAngle = Math.PI / 2; // Prevent looking from below ground up
+
+        // Window Resize Listener
+        window.addEventListener( 'resize', onWindowResize );
+    }
+
+    // 4. Handle Window Resizing
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize( window.innerWidth, window.innerHeight );
+    }
+
+    // 5. Animation Loop
+    function animate() {
+        requestAnimationFrame( animate );
+
+        // Cube Animation (optional: keep it rotating slowly)
+        cube.rotation.x += 0.005;
+        cube.rotation.y += 0.005;
+
+        // Update OrbitControls (required if damping is enabled)
+        controls.update();
+
+        // Render the scene
+        renderer.render( scene, camera );
+    }
+
+    // --- Start the application ---
+    init();
+    animate();
+
+</script>
+
+</body>
+</html>
